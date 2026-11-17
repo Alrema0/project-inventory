@@ -8,7 +8,7 @@ let importing=false;
 const contactKeys=['departmentName','phone','email'];
 const newDraft=()=>({uid:crypto.randomUUID(),...Object.fromEntries(Object.keys(labels).map(k=>[k,''])),status:'لم يبدأ',completionPercent:'0'});
 /* ضع رابط Apps Script Web App هنا */
-const SHEET_URL='';
+const SHEET_URL='https://script.google.com/macros/s/AKfycby7Q7QN4p-NkLffkCVVQ5SOKyqvQ6VRWexfvTf546pHxurC3inryqrXXSxTGwqrK4x6/exec';
 const STORE_KEY='nwc-census-submissions';
 function readStore(){try{return JSON.parse(localStorage.getItem(STORE_KEY)||'[]');}catch{return [];}}
 function writeStore(list){try{localStorage.setItem(STORE_KEY,JSON.stringify(list.slice(0,20)));}catch{}}
