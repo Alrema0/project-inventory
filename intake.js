@@ -30,12 +30,33 @@ function reportProject(p,reference,index,submittedAt='') {
   return {businessUnit:'',location:'',contractNumber:'',contractor:'',consultant:'',projectGoal:p.description||'',notes:'',...cleanProject(p),id:`${reference}-${index}`,projectNumber:`${reference.slice(0,8)}-${index+1}`,reference,submittedAt,delayOverride:'auto'};
 }
 function syncReports(){
-  projects=submissions.flatMap(s=>s.records.map((p,i)=>reportProject(p,s.reference,i,s.submittedAt)));
+  projects=submissions.flatMap(s=>s.records.map((p,i)=>reportProject(p,s.reference,i,s.submittedAt)).filter((_,i)=>!(s.deleted||[]).includes(i)));
   if(!submissions.some(s=>s.reference===activeReference)) projects.push(...drafts.filter(p=>p.projectName.trim()).map((p,i)=>reportProject(p,'مسودة',i)));
   render();
   const total=drafts.reduce((sum,p)=>sum+(Number.isFinite(Number(p.contractValue))?Number(p.contractValue):0),0);
   q('#quick-summary').innerHTML=`<div class="quick-summary"><strong>${fmt(drafts.length)} مشروع <span>·</span> ${fmt(total)} ر.س</strong><small>ملخص قبل الإرسال</small></div>`;
 }
+window.deleteProject=async(ref,idx)=>{
+  if(busy||importing)return;
+  if(ref==='مسودة'){
+    const named=drafts.filter(p=>p.projectName.trim());const target=named[idx];if(!target)return;
+    if(!confirm(`حذف المشروع «${target.projectName}» من النموذج؟`))return;
+    drafts=drafts.filter(p=>p!==target);if(!drafts.length)drafts=[newDraft()];
+    activeReference=null;drawDrafts();return;
+  }
+  const s=submissions.find(r=>r.reference===ref);if(!s||!s.records[idx])return;
+  const sent=s.dispatched.includes(idx);
+  if(!confirm(`حذف المشروع «${s.records[idx].projectName}»؟`+(sent?'\nسيُحذف أيضاً من Google Sheets.':'')))return;
+  try{
+    if(sent&&SHEET_URL){
+      const response=await fetch(SHEET_URL,{method:'POST',body:JSON.stringify({action:'delete',reference:ref,index:idx+1}),signal:AbortSignal.timeout(35000)});
+      const data=await response.json();if(!data.ok)throw Error(data.error);
+    }
+    const updated={...s,deleted:[...(s.deleted||[]),idx]};
+    if(activeSubmission?.reference===ref)activeSubmission=updated;
+    saveLocal(updated);updateSaved(updated);
+  }catch{alert('تعذّر حذف المشروع من Google Sheets. يرجى المحاولة مرة أخرى.');}
+};
 function updateSaved(s){submissions=[s,...submissions.filter(r=>r.reference!==s.reference)];syncReports();drawPending();}
 const pending=document.createElement('div');pending.id='session-pending';q('#session-error').after(pending);
 function drawPending(){
