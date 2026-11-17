@@ -7,10 +7,22 @@ let drafts=[], submissions=[], activeReference=null, activeSubmission=null, busy
 let importing=false;
 const contactKeys=['departmentName','phone','email'];
 const newDraft=()=>({uid:crypto.randomUUID(),...Object.fromEntries(Object.keys(labels).map(k=>[k,''])),status:'لم يبدأ',completionPercent:'0'});
-async function api(path,options={}) {
-  const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...options.headers},signal:AbortSignal.timeout(35000)});
+/* ضع رابط Apps Script Web App هنا */
+const SHEET_URL='';
+const STORE_KEY='nwc-census-submissions';
+function readStore(){try{return JSON.parse(localStorage.getItem(STORE_KEY)||'[]');}catch{return [];}}
+function writeStore(list){try{localStorage.setItem(STORE_KEY,JSON.stringify(list.slice(0,20)));}catch{}}
+function saveLocal(s){writeStore([s,...readStore().filter(r=>r.reference!==s.reference)]);}
+async function sendToSheet(s){
+  const rows=s.records.map((p,i)=>{
+    const row={'الرقم المرجعي':s.reference,'رقم المشروع في الإرسال':i+1,'تاريخ الإرسال':s.submittedAt};
+    for(const [k,v] of Object.entries(p)) row[labels[k]||k]=v;
+    row['الحالة المحسوبة']=typeof state==='function'?state(reportProject(p,s.reference,i,s.submittedAt)):p.status;
+    return row;
+  });
+  const response=await fetch(SHEET_URL,{method:'POST',body:JSON.stringify({reference:s.reference,rows}),signal:AbortSignal.timeout(35000)});
   const data=await response.json();
-  if(!response.ok) throw Error(data.error||'تعذر إكمال الطلب. يرجى إعادة المحاولة.');
+  if(!data.ok) throw Error(data.error||'تعذر الحفظ في Google Sheets.');
   return data;
 }
 function showError(selector,message){q(selector).hidden=!message;q(selector).textContent=message;}
@@ -36,16 +48,16 @@ function drawPending(){
 }
 async function loadSession(){
   showError('#session-error','');
-  try{submissions=await api('/api/census/submissions');loaded=true;syncReports();drawPending();}
+  try{submissions=readStore();loaded=true;syncReports();drawPending();}
   catch(e){loaded=false;const el=q('#session-error');el.hidden=false;el.textContent='تعذر تحميل بيانات الجلسة. '+e.message+' ';const retry=document.createElement('button');retry.className='button secondary';retry.textContent='إعادة المحاولة';retry.onclick=loadSession;el.append(retry);}
 }
 async function loadSheetStatus(){
   const notice=q('#sheet-connection-status');
   try{
-    const status=await api('/api/sheets/status');
-    notice.hidden=status.configured===true;
-    notice.textContent=status.configured?'':'الحفظ في Google Sheets بانتظار تفعيل الربط. تُحفظ البيانات في المنصة عند الإرسال، ولم تُرسل إلى الجدول بعد.';
-    return status.configured===true;
+    const configured=!!SHEET_URL;
+    notice.hidden=configured;
+    notice.textContent=configured?'':'الحفظ في Google Sheets بانتظار تفعيل الربط. تُحفظ البيانات على هذا الجهاز عند الإرسال، ولم تُرسل إلى الجدول بعد.';
+    return configured;
   }catch{
     notice.hidden=false;notice.textContent='تعذر التحقق من إعداد الحفظ في Google Sheets. يمكن إعادة المحاولة دون فقد البيانات.';
     throw Error('تعذر التحقق من إعداد الحفظ في Google Sheets.');
@@ -129,17 +141,17 @@ q('#send-projects').onclick=async e=>{
     if(!loaded){await loadSession();if(!loaded)throw Error('يلزم استعادة الاتصال ببيانات الجلسة أولاً.');}
     button.textContent='جارٍ حفظ البيانات…';
     if(!activeSubmission) {
-      activeSubmission=await api('/api/census/submissions',{method:'POST',body:JSON.stringify({reference:activeReference,records})});
-      updateSaved(activeSubmission);
+      activeSubmission={reference:activeReference,submittedAt:new Date().toISOString(),records,dispatched:[]};
+      saveLocal(activeSubmission);updateSaved(activeSubmission);
     }
     q('#submission-date').value=activeSubmission.submittedAt;
-    if(!await loadSheetStatus())throw Error('الربط مع Google Sheets بانتظار التفعيل. بياناتك محفوظة في المنصة ولم تُرسل إلى الجدول بعد.');
-    for(let i=0;i<records.length;i++){
-      if(activeSubmission.dispatched.includes(i))continue;
-      button.textContent=`جارٍ الحفظ ${fmt(i+1)} / ${fmt(records.length)}…`;
-      q('#send-progress').textContent=`جارٍ حفظ المشروع ${fmt(i+1)} من ${fmt(records.length)} في Google Sheets.`;
-      activeSubmission=await api(`/api/census/submissions/${activeReference}/sheet`,{method:'POST',body:JSON.stringify({index:i})});
-      updateSaved(activeSubmission);
+    if(!await loadSheetStatus())throw Error('الربط مع Google Sheets بانتظار التفعيل. بياناتك محفوظة على هذا الجهاز ولم تُرسل إلى الجدول بعد.');
+    if(activeSubmission.dispatched.length<records.length){
+      button.textContent='جارٍ الحفظ في Google Sheets…';
+      q('#send-progress').textContent=`جارٍ حفظ ${fmt(records.length)} مشروع في Google Sheets.`;
+      await sendToSheet(activeSubmission);
+      activeSubmission={...activeSubmission,dispatched:records.map((_,i)=>i)};
+      saveLocal(activeSubmission);updateSaved(activeSubmission);
     }
     q('#success-reference').textContent=activeSubmission.reference;
     syncReports();q('#success-view').hidden=false;button.hidden=true;
@@ -154,7 +166,7 @@ let excelLoader;
 function loadExcel(){
   if(window.ExcelJS)return Promise.resolve(window.ExcelJS);
   if(!excelLoader)excelLoader=new Promise((resolve,reject)=>{
-    const script=document.createElement('script');script.src='/vendor/exceljs.min.js';script.onload=()=>window.ExcelJS?resolve(window.ExcelJS):reject(Error('تعذر تشغيل قارئ Excel.'));script.onerror=()=>{script.remove();excelLoader=null;reject(Error('تعذر تحميل قارئ Excel؛ يرجى إعادة المحاولة.'));};document.head.append(script);
+    const script=document.createElement('script');script.src='./vendor/exceljs.min.js';script.onload=()=>window.ExcelJS?resolve(window.ExcelJS):reject(Error('تعذر تشغيل قارئ Excel.'));script.onerror=()=>{script.remove();excelLoader=null;reject(Error('تعذر تحميل قارئ Excel؛ يرجى إعادة المحاولة.'));};document.head.append(script);
   });
   return excelLoader;
 }
