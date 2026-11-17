@@ -55,7 +55,7 @@ window.deleteProject=async(ref,idx)=>{
     const updated={...s,deleted:[...(s.deleted||[]),idx]};
     if(activeSubmission?.reference===ref)activeSubmission=updated;
     saveLocal(updated);updateSaved(updated);
-  }catch{alert('تعذّر حذف المشروع من Google Sheets. يرجى المحاولة مرة أخرى.');}
+  }catch(e){alert('تعذّر حذف المشروع من Google Sheets.\n'+(e&&e.message?e.message:'')+'\nيرجى التأكد من تحديث نشر Apps Script ثم المحاولة مرة أخرى.');}
 };
 function updateSaved(s){submissions=[s,...submissions.filter(r=>r.reference!==s.reference)];syncReports();drawPending();}
 const pending=document.createElement('div');pending.id='session-pending';q('#session-error').after(pending);
