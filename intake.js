@@ -1,5 +1,5 @@
 import { labels, censusStatuses, cleanProject, projectErrors } from './census-model.js';
-import { importWorkbook, templateColumns } from './excel-import.js';
+import { importWorkbook, templateColumns } from './excel-import.js?v=7';
 const q=s=>document.querySelector(s);
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=value=>new Intl.NumberFormat('ar-SA',{maximumFractionDigits:2}).format(value);

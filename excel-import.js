@@ -57,10 +57,22 @@ function readCell(cell,key,date1904){
   }
   return String(value??'').trim();
 }
+function extraValue(cell,date1904){
+  const v=cellValue(cell);
+  if(v instanceof Date)return dateValue(v,date1904);
+  if(typeof v==='number'&&/[dmy]/i.test(cell.numFmt||'')&&!/%/.test(cell.numFmt||''))return dateValue(v,date1904);
+  if(typeof v==='number'&&/%/.test(cell.numFmt||''))return Number((v*100).toFixed(4))+'%';
+  return String(v??'').trim();
+}
 function detectHeader(sheet){
   for(let i=1;i<=Math.min(sheet.rowCount,25);i++){
-    const columns=new Map();sheet.getRow(i).eachCell((cell,col)=>{const key=headerKey(cellValue(cell));if(key){if(columns.has(key))throw Error(`الورقة «${sheet.name}»: يوجد عمود مكرر للحقل «${labels[key]}».`);columns.set(key,col);}});
-    if(columns.has('projectName')||(columns.has('departmentName')&&columns.size>=2))return {row:i,columns};
+    const columns=new Map(),extras=new Map(),used=new Set();
+    sheet.getRow(i).eachCell((cell,col)=>{
+      const text=String(cellValue(cell)??'').trim();const key=headerKey(text);
+      if(key){if(columns.has(key))throw Error(`الورقة «${sheet.name}»: يوجد عمود مكرر للحقل «${labels[key]}».`);columns.set(key,col);}
+      else if(text){let name=text.slice(0,100),n=2;while(used.has(name))name=`${text.slice(0,95)} (${n++})`;used.add(name);extras.set(col,name);}
+    });
+    if(columns.has('projectName')||(columns.has('departmentName')&&columns.size>=2))return {row:i,columns,extras};
   }
   return null;
 }
@@ -76,11 +88,12 @@ export function importWorkbook(workbook,defaults={}){
   }
   if(!tables.length)throw Error('لم يُعثر على عمود «اسم المشروع». يرجى استخدام القالب أو عناوين أعمدة عربية واضحة.');
   const onlyContact=contacts.size===1?[...contacts.values()][0]:{};
-  for(const {sheet,row,columns} of tables){
+  for(const {sheet,row,columns,extras} of tables){
     let previous={};
     for(let r=row+1;r<=sheet.rowCount;r++){
       const excelRow=sheet.getRow(r);
       const data=Object.fromEntries([...Object.keys(labels),'projectType'].map(k=>[k,columns.has(k)?readCell(excelRow.getCell(columns.get(k)),k,workbook.properties.date1904):'']));
+      data.extras=[...extras].map(([col,label])=>({label,value:extraValue(excelRow.getCell(col),workbook.properties.date1904)})).filter(x=>x.value!=='');
       if(!Object.keys(labels).some(k=>data[k]!==''))continue;
       if(!data.projectName)throw Error(`الورقة «${sheet.name}»، الصف ${r}: توجد بيانات دون اسم مشروع. لم تُستورد أي بيانات؛ يرجى استكمال الاسم أو حذف الصف.`);
       const dept=data.departmentName||previous.departmentName||onlyContact.departmentName||defaults.departmentName||'';
