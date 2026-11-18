@@ -10,8 +10,10 @@ const newDraft=()=>({uid:crypto.randomUUID(),...Object.fromEntries(Object.keys(l
 /* ضع رابط Apps Script Web App هنا */
 const SHEET_URL='https://script.google.com/macros/s/AKfycby7Q7QN4p-NkLffkCVVQ5SOKyqvQ6VRWexfvTf546pHxurC3inryqrXXSxTGwqrK4x6/exec';
 const STORE_KEY='nwc-census-submissions';
-function readStore(){try{return JSON.parse(localStorage.getItem(STORE_KEY)||'[]');}catch{return [];}}
-function writeStore(list){try{localStorage.setItem(STORE_KEY,JSON.stringify(list.slice(0,20)));}catch{}}
+// البيانات تبقى في هذه النافذة فقط، وتُمسح عند إغلاقها، فلا تظهر لمن يستخدم الجهاز بعدك
+try{localStorage.removeItem(STORE_KEY);}catch{}
+function readStore(){try{return JSON.parse(sessionStorage.getItem(STORE_KEY)||'[]');}catch{return [];}}
+function writeStore(list){try{sessionStorage.setItem(STORE_KEY,JSON.stringify(list.slice(0,20)));}catch{}}
 function saveLocal(s){writeStore([s,...readStore().filter(r=>r.reference!==s.reference)]);}
 async function sendToSheet(s){
   const rows=s.records.map((p,i)=>{
