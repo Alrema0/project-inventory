@@ -16,7 +16,8 @@ function saveLocal(s){writeStore([s,...readStore().filter(r=>r.reference!==s.ref
 async function sendToSheet(s){
   const rows=s.records.map((p,i)=>{
     const row={'الرقم المرجعي':s.reference,'رقم المشروع في الإرسال':i+1,'تاريخ الإرسال':s.submittedAt};
-    for(const [k,v] of Object.entries(p)) row[labels[k]||k]=v;
+    for(const [k,v] of Object.entries(p)) if(k!=='extras') row[labels[k]||k]=v;
+    for(const x of p.extras||[]) row[x.label]=x.value;
     row['الحالة المحسوبة']=typeof state==='function'?state(reportProject(p,s.reference,i,s.submittedAt)):p.status;
     return row;
   });
@@ -27,7 +28,7 @@ async function sendToSheet(s){
 }
 function showError(selector,message){q(selector).hidden=!message;q(selector).textContent=message;}
 function reportProject(p,reference,index,submittedAt='') {
-  return {businessUnit:'',location:'',contractNumber:'',contractor:'',consultant:'',projectGoal:p.description||'',notes:'',...cleanProject(p),id:`${reference}-${index}`,projectNumber:`${reference.slice(0,8)}-${index+1}`,reference,submittedAt,delayOverride:'auto'};
+  return {businessUnit:'',location:'',contractNumber:'',contractor:'',consultant:'',projectGoal:p.description||'',notes:'',...cleanProject(p),id:`${reference}-${index}`,projectNumber:`${reference.slice(0,8)}-${index+1}`,reference,submittedAt,delayOverride:'auto',extras:p.extras||[]};
 }
 function syncReports(){
   projects=submissions.flatMap(s=>s.records.map((p,i)=>reportProject(p,s.reference,i,s.submittedAt)).filter((_,i)=>!(s.deleted||[]).includes(i)));
@@ -84,6 +85,36 @@ async function loadSheetStatus(){
     throw Error('تعذر التحقق من إعداد الحفظ في Google Sheets.');
   }
 }
+function cleanExtras(list){return (list||[]).map(x=>({label:String(x.label||'').trim().slice(0,100),value:String(x.value??'').trim().slice(0,4000)})).filter(x=>x.label);}
+function extrasSection(p){
+  const rows=(p.extras||[]).map((x,i)=>`<div class="extra-row" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:10px;align-items:end">
+    <label>اسم البند<input type="text" list="extra-names" maxlength="100" placeholder="مثال: عدد اللوحات" value="${esc(x.label)}" data-extra-label="${i}"></label>
+    <label>القيمة<input type="text" maxlength="4000" value="${esc(x.value)}" data-extra-value="${i}"></label>
+    <button type="button" class="button secondary" data-extra-remove="${i}" aria-label="حذف البند" title="حذف البند">✕</button></div>`).join('');
+  return `<section class="project-field-group project-extras"><div class="project-group-heading"><span>٠٤</span><div><h3>بيانات إضافية</h3><p>أضف أي بند غير موجود أعلاه (مثل عدد اللوحات أو الصفحات) واكتب قيمته.</p></div></div>
+    <div class="group-fields" style="display:flex;flex-direction:column;gap:12px">${rows}<button type="button" class="button secondary" data-extra-add style="align-self:flex-start">+ إضافة بند</button></div></section>`;
+}
+function drawExtraNames(){
+  let dl=q('#extra-names');if(!dl){dl=document.createElement('datalist');dl.id='extra-names';document.body.append(dl);}
+  const names=[...new Set([...drafts.flatMap(p=>(p.extras||[]).map(x=>String(x.label||'').trim())),...submissions.flatMap(s=>s.records.flatMap(r=>(r.extras||[]).map(x=>x.label)))].filter(Boolean))];
+  dl.innerHTML=names.map(n=>`<option value="${esc(n)}"></option>`).join('');
+}
+document.addEventListener('click',e=>{
+  const card=e.target.closest('[data-draft]');if(!card||!q('#draft-projects').contains(card))return;
+  const draft=drafts.find(p=>p.uid===card.dataset.draft);if(!draft)return;
+  if(e.target.closest('[data-extra-add]')){
+    draft.extras=[...(draft.extras||[]),{label:'',value:''}];activeReference=null;drawDrafts();
+    const inputs=q(`[data-draft="${draft.uid}"]`).querySelectorAll('[data-extra-label]');inputs[inputs.length-1]?.focus();
+  }
+  const rm=e.target.closest('[data-extra-remove]');
+  if(rm){draft.extras=(draft.extras||[]).filter((_,i)=>i!==Number(rm.dataset.extraRemove));activeReference=null;drawDrafts();}
+});
+document.addEventListener('input',e=>{
+  const el=e.target;const card=el.closest&&el.closest('[data-draft]');if(!card)return;
+  const draft=drafts.find(p=>p.uid===card.dataset.draft);if(!draft)return;
+  if(el.dataset.extraLabel!==undefined){draft.extras[Number(el.dataset.extraLabel)].label=el.value;changed();}
+  else if(el.dataset.extraValue!==undefined){draft.extras[Number(el.dataset.extraValue)].value=el.value;changed();}
+});
 function drawDrafts(){
   q('#send-projects').textContent='إرسال';
   const field=(key,value,prefix)=>{
@@ -107,8 +138,10 @@ function drawDrafts(){
     ['٠١','البيانات الأساسية',['projectName','projectManager','description'],'اسم المشروع والمسؤول عنه والوصف المختصر.'],
     ['٠٢','الجدول الزمني والقيمة',['startDate','plannedEndDate','contractValue'],'تواريخ المشروع وقيمته التعاقدية بالريال السعودي.'],
     ['٠٣','الحالة ونسبة الإنجاز',['status','completionPercent','notes'],'الحالة الحالية ونسبة الإنجاز والملاحظات أو المعوقات.']
-  ].map(([number,title,keys,description])=>`<section class="project-field-group"><div class="project-group-heading"><span>${number}</span><div><h3>${title}</h3><p>${description}</p></div></div><div class="census-grid group-fields">${keys.map(k=>field(k,p[k]??'',p.uid)).join('')}</div></section>`).join('')}</div></section>`).join('');
+  ].map(([number,title,keys,description])=>`<section class="project-field-group"><div class="project-group-heading"><span>${number}</span><div><h3>${title}</h3><p>${description}</p></div></div><div class="census-grid group-fields">${keys.map(k=>field(k,p[k]??'',p.uid)).join('')}</div></section>`).join('')}${extrasSection(p)}</div></section>`).join('');
+  drawExtraNames();
   q('#draft-projects').querySelectorAll('input,textarea,select').forEach(el=>el.addEventListener('input',()=>{
+    if(!el.name)return;
     const draft=drafts.find(p=>p.uid===el.closest('[data-draft]').dataset.draft);draft[el.name]=el.value;
     if(el.name==='status'&&['مكتمل','لم يبدأ'].includes(el.value)){
       draft.completionPercent=el.value==='مكتمل'?100:0;
@@ -157,7 +190,7 @@ q('#send-projects').onclick=async e=>{
   busy=true;const button=q('#send-projects');button.disabled=true;
   q('#census-form').querySelectorAll('input,select,textarea,button').forEach(el=>el.disabled=true);
   showError('#send-error','');
-  const records=activeSubmission?.records||drafts.map(cleanProject);
+  const records=activeSubmission?.records||drafts.map(p=>({...cleanProject(p),extras:cleanExtras(p.extras)}));
   try{
     if(!loaded){await loadSession();if(!loaded)throw Error('يلزم استعادة الاتصال ببيانات الجلسة أولاً.');}
     button.textContent='جارٍ حفظ البيانات…';
