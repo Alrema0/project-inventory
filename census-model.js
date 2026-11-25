@@ -1,9 +1,8 @@
-export const sectors = ['بنية تحتية','تطوير عقاري ومباني','تحول رقمي وتقنية','أخرى'];
 export const censusStatuses = ['لم يبدأ','قيد التنفيذ','متأخر','مكتمل'];
-export const labels = {departmentName:'اسم الإدارة',projectManager:'المسؤول عن المشروع',phone:'رقم التواصل',email:'البريد الإلكتروني',projectName:'اسم المشروع',description:'وصف مختصر',contractValue:'القيمة التعاقدية بالريال السعودي',startDate:'تاريخ البداية',plannedEndDate:'تاريخ النهاية المتوقع',status:'الحالة',completionPercent:'نسبة الإنجاز %',notes:'ملاحظات أو معوقات'};
+export const labels = {departmentName:'اسم الإدارة',projectManager:'المسؤول عن المشروع',phone:'رقم التواصل',email:'البريد الإلكتروني',projectName:'اسم المشروع',projectType:'نوع المشروع',description:'وصف مختصر',contractValue:'القيمة التعاقدية بالريال السعودي',startDate:'تاريخ البداية',plannedEndDate:'تاريخ النهاية المتوقع',status:'الحالة',completionPercent:'نسبة الإنجاز %',notes:'ملاحظات أو معوقات'};
 export const numeric = value => Number(String(value).replace(/[٠-٩۰-۹]/g,c=>'٠١٢٣٤٥٦٧٨٩'.includes(c)?'٠١٢٣٤٥٦٧٨٩'.indexOf(c):'۰۱۲۳۴۵۶۷۸۹'.indexOf(c)).replace(/٬/g,'').replace(/٫/g,'.'));
 export function cleanProject(input) {
-  return {projectType:String(input?.projectType??'').trim(),...Object.fromEntries(Object.keys(labels).map(k=>[k,['contractValue','completionPercent'].includes(k)?numeric(input?.[k]??''):String(input?.[k]??'').trim()]))};
+  return {...Object.fromEntries(Object.keys(labels).map(k=>[k,['contractValue','completionPercent'].includes(k)?numeric(input?.[k]??''):String(input?.[k]??'').trim()]))};
 }
 export function projectErrors(input) {
   const p=cleanProject(input), errors=[];

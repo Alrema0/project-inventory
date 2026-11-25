@@ -1,4 +1,4 @@
-import { labels, numeric, projectErrors } from './census-model.js';
+import { labels, numeric, projectErrors } from './census-model.js?v=11';
 export const templateColumns=Object.entries(labels);
 const contactKeys=['departmentName','phone','email'];
 const aliases={
@@ -92,7 +92,7 @@ export function importWorkbook(workbook,defaults={}){
     let previous={};
     for(let r=row+1;r<=sheet.rowCount;r++){
       const excelRow=sheet.getRow(r);
-      const data=Object.fromEntries([...Object.keys(labels),'projectType'].map(k=>[k,columns.has(k)?readCell(excelRow.getCell(columns.get(k)),k,workbook.properties.date1904):'']));
+      const data=Object.fromEntries(Object.keys(labels).map(k=>[k,columns.has(k)?readCell(excelRow.getCell(columns.get(k)),k,workbook.properties.date1904):'']));
       data.extras=[...extras].map(([col,label])=>({label,value:extraValue(excelRow.getCell(col),workbook.properties.date1904)})).filter(x=>x.value!=='');
       if(!Object.keys(labels).some(k=>data[k]!==''))continue;
       if(!data.projectName)throw Error(`الورقة «${sheet.name}»، الصف ${r}: توجد بيانات دون اسم مشروع. لم تُستورد أي بيانات؛ يرجى استكمال الاسم أو حذف الصف.`);
@@ -103,8 +103,6 @@ export function importWorkbook(workbook,defaults={}){
       if(!data.status)data.status='لم يبدأ';
       if(data.completionPercent==='')data.completionPercent=data.status==='مكتمل'?100:data.status==='لم يبدأ'?0:'';
       if(data.status==='جاري التنفيذ')data.status='قيد التنفيذ';
-      if(data.projectType==='تطوير عقاري')data.projectType='تطوير عقاري ومباني';
-      if(data.projectType==='تحول رقمي')data.projectType='تحول رقمي وتقنية';
       const errors=projectErrors(data);
       if(errors.length)warnings.push({sheet:sheet.name,row:r,errors});
       records.push(data);sources.push({sheet:sheet.name,row:r});

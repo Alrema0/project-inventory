@@ -1,5 +1,5 @@
-import { labels, censusStatuses, cleanProject, projectErrors } from './census-model.js';
-import { importWorkbook, templateColumns } from './excel-import.js?v=7';
+import { labels, censusStatuses, cleanProject, projectErrors } from './census-model.js?v=11';
+import { importWorkbook, templateColumns } from './excel-import.js?v=11';
 const q=s=>document.querySelector(s);
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=value=>new Intl.NumberFormat('ar-SA',{maximumFractionDigits:2}).format(value);
@@ -137,7 +137,7 @@ function drawDrafts(){
     const previous=drafts[0][el.name];drafts.forEach((p,i)=>{if(i===0||p[el.name]===previous)p[el.name]=el.value;});q('#draft-projects').querySelectorAll(`[name="${el.name}"]`).forEach(input=>{input.value=drafts.find(p=>p.uid===input.closest('[data-draft]').dataset.draft)[el.name];});changed();
   });
   q('#draft-projects').innerHTML=drafts.map((p,i)=>`<section class="panel census-card" data-draft="${p.uid}"><div class="census-card-head"><h2>المشروع ${fmt(i+1)}</h2><button type="button" class="button secondary" data-remove="${p.uid}" ${drafts.length===1?'hidden':''}>حذف</button></div><div class="project-groups">${contactKeys.some(k=>p[k]!==drafts[0][k])?`<section class="project-field-group project-contact"><div class="project-group-heading"><div><h3>بيانات الإدارة والتواصل لهذا المشروع</h3><p>بيانات مستقلة كما وردت في الملف المرفق.</p></div></div><div class="census-grid group-fields">${contactKeys.map(k=>field(k,p[k]??'',p.uid)).join('')}</div></section>`:''}${[
-    ['٠١','البيانات الأساسية',['projectName','projectManager','description'],'اسم المشروع والمسؤول عنه والوصف المختصر.'],
+    ['٠١','البيانات الأساسية',['projectName','projectType','projectManager','description'],'اسم المشروع ونوعه والمسؤول عنه والوصف المختصر.'],
     ['٠٢','الجدول الزمني والقيمة',['startDate','plannedEndDate','contractValue'],'تواريخ المشروع وقيمته التعاقدية بالريال السعودي.'],
     ['٠٣','الحالة ونسبة الإنجاز',['status','completionPercent','notes'],'الحالة الحالية ونسبة الإنجاز والملاحظات أو المعوقات.']
   ].map(([number,title,keys,description])=>`<section class="project-field-group"><div class="project-group-heading"><span>${number}</span><div><h3>${title}</h3><p>${description}</p></div></div><div class="census-grid group-fields">${keys.map(k=>field(k,p[k]??'',p.uid)).join('')}</div></section>`).join('')}${extrasSection(p)}</div></section>`).join('');
